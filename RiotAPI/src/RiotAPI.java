@@ -13,37 +13,60 @@ public class RiotAPI
 	private String summonerName;
 	private String inputServer;
 	public long summonerID;
+	private long sleep;
 	
-	public RiotAPI(String API_KEY, String summonerName, String inputServer) throws IOException
+	public RiotAPI(String API_KEY, String inputServer, long sleep)
 	{
 		this.apiKey = API_KEY;
-		this.summonerName = summonerName;
 		this.inputServer = inputServer;
+		this.sleep = sleep;
 		
 		initializeServer();
-		
-		this.summonerID = getSummonerID();
 	}
 	
-	public String currentGame() throws IOException
+	public RiotAPI(String API_KEY, String inputServer)
 	{
-		String response = getResponse("https://{SERVER}/observer-mode/rest/consumer/getSpectatorGameInfo/{PLATFORM_ID}/{SUMMONER_ID}?api_key={API_KEY}");
-		System.out.println(response);
-		return null;
+		this.apiKey = API_KEY;
+		this.inputServer = inputServer;
+		this.sleep = 1000;
+		
+		initializeServer();
 	}
 	
+	public RiotAPI(String API_KEY)
+	{
+		this.apiKey = API_KEY;
+		this.inputServer = "NA";
+		this.sleep = 1000;
+		
+		initializeServer();
+	}
+	
+	public void getCurrentGame(long summonerID)
+	{
+		this.summonerID = summonerID;
+		String response = getResponse("https://{SERVER}/observer-mode/rest/consumer/getSpectatorGameInfo/{PLATFORM_ID}/{SUMMONER_ID}?api_key={API_KEY}");
+		String[] playersName = getSummonerNameFromCurrentGame(response);
+		long[] playersID = new long[playersName.length];
+		
+		for (int i = 0; i < playersName.length; i++)
+		{
+			System.out.print("Player number " + (i + 1) + "  " + playersName[i].replaceAll("\\s+","") + " ");
+			playersID[i] = this.getSummonerID(playersName[i].replaceAll("\\s+",""));
+			System.out.println("Summoner ID: " + playersID[i]);
+		}
+
+	}
+	
+	//TODO
 	private String getChampionName(String response)
 	{
 		return null;
 	}
 	
-	public void getCurrentGame() throws IOException
+	public long getSummonerID(String summonerName)
 	{
-		String ret = currentGame();
-	}
-	
-	private long getSummonerID() throws IOException
-	{
+		this.summonerName = summonerName;
 		String response = getResponse("https://{SERVER}/api/lol/{SERVER_1}/v1.4/summoner/by-name/{SUMMONER_NAME}?api_key={API_KEY}");		
 		String finalID = getSummonerIDJSON(response);
 		return Long.parseLong(finalID);
@@ -53,6 +76,7 @@ public class RiotAPI
 	{
 		String finishedResponse = "";
 		boolean IDFound = false;
+		//System.out.println(response);
 		for (int i = 0; i < response.length(); i++)
 		{
 			//Fail safe to quit in case we don't find ID.
@@ -62,12 +86,7 @@ public class RiotAPI
 			}
 
 			//If we find ID field
-			if (response.charAt(i) == '"' 
-				&& response.charAt(i+1) == 'i' 
-				&& response.charAt(i+2) == 'd' 
-				&& response.charAt(i+3) == '"'
-				&& response.charAt(i+4) == ':'
-				)
+			if (response.charAt(i) == '"' && response.charAt(i+1) == 'i' && response.charAt(i+2) == 'd' && response.charAt(i+3) == '"' && response.charAt(i+4) == ':')
 			{
 				IDFound = true;
 			}
@@ -94,8 +113,44 @@ public class RiotAPI
 				}
 			}
 		}
-	
+		
+		try 
+		{
+			Thread.sleep(this.sleep);
+		} catch (InterruptedException e) 
+		{
+			e.printStackTrace();
+		}
 		return finishedResponse;
+	}
+	
+	private String[] getSummonerNameFromCurrentGame(String response)
+	{
+		String foo = "";
+		String players[] = new String[10];
+		int counter = 0;
+		
+		for (int i = 0; i < response.length(); i++)
+		{
+			//If we find summonerName
+			//I'm sorry
+			if (response.charAt(i) == '"' && response.charAt(i+1) == 's' && response.charAt(i+2) == 'u' && response.charAt(i+3) == 'm' && response.charAt(i+4) == 'm' && response.charAt(i+5) == 'o' && response.charAt(i+6) == 'n' && response.charAt(i+7) == 'e' && response.charAt(i+8) == 'r' && response.charAt(i+9) == 'N' && response.charAt(i+10) == 'a' && response.charAt(i+11) == 'm' && response.charAt(i+12) == 'e' && response.charAt(i+13) == '"' && response.charAt(i+14) == ':' && response.charAt(i+15) == '"')
+			{
+				i += 16;
+				
+				for (; response.charAt(i) != '"'; i++)
+				{
+					foo += response.charAt(i);
+				}
+				
+				players[counter] = foo;
+				
+				counter++;
+				
+				foo = "";
+			}
+		}	
+		return players;
 	}
 	
 	
@@ -129,7 +184,6 @@ public class RiotAPI
 		this.PLATFORM_ID.put("TR", "TR1");
 		this.PLATFORM_ID.put("RU", "RU");
 		this.PLATFORM_ID.put("PBE", "PBE1");
-
 	}
 	
 	private String getPlatformID()
@@ -145,31 +199,39 @@ public class RiotAPI
 	 * @return
 	 * @throws IOException
 	 */
-	private String getResponse(String url) throws IOException
+	private String getResponse(String url)
 	{
-		url = url.replace("{SERVER}", SERVERS.get(inputServer));
-		url = url.replace("{SERVER_1}", inputServer);
-		url = url.replace("{PLATFORM_ID}", getPlatformID());
-		url = url.replace("{SUMMONER_NAME}", summonerName);
-		url = url.replace("{API_KEY}", apiKey);
-		url = url.replace("{SUMMONER_ID}", getSummonerIDString());
-		
-		URL website = new URL(url);
-        URLConnection connection = website.openConnection();
-        BufferedReader in = new BufferedReader(
-                            new InputStreamReader(
-                            connection.getInputStream()));
-
-        StringBuilder response = new StringBuilder();
-        String inputLine;
-
-        while ((inputLine = in.readLine()) != null) 
-        {
-            response.append(inputLine);
-        }
-        
-        in.close();
-
-        return response.toString();
+		try 
+		{
+			url = url.replace("{SERVER}", SERVERS.get(inputServer));
+			url = url.replace("{SERVER_1}", inputServer);
+			url = url.replace("{PLATFORM_ID}", getPlatformID());
+			url = url.replace("{SUMMONER_NAME}", summonerName);
+			url = url.replace("{API_KEY}", apiKey);
+			url = url.replace("{SUMMONER_ID}", getSummonerIDString());
+			
+			//System.out.println(url);
+			URL website = new URL(url);
+	        URLConnection connection = website.openConnection();
+	        BufferedReader in = new BufferedReader(
+	                            new InputStreamReader(
+	                            connection.getInputStream()));
+	
+	        StringBuilder response = new StringBuilder();
+	        String inputLine;
+	
+	        while ((inputLine = in.readLine()) != null) 
+	        {
+	            response.append(inputLine);
+	        }
+	        
+	        in.close();
+	
+	        return response.toString();
+		}
+        catch (IOException e)
+		{
+			return null;
+		}
 	}
 }
